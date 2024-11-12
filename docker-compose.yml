@@ -1,0 +1,91 @@
+version: "3"
+services:
+  redis1:
+    container_name: redis1
+    image: redis
+    ports:
+      - 6379:6379
+    environment: 
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - bc_redis
+
+  mongo1:
+    container_name: mongo1
+    image: mongo:4.4.6
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017", "--keyFile", "/etc/mongodb/pki/keyfile"]
+    restart: always
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+      - MONGO_INITDB_DATABASE=peer_information
+    volumes:
+      - ${PWD}/rs_keyfile:/etc/mongodb/pki/keyfile
+      - ~/data/mongo1:/data/db
+      #- ~/data/mongo:/data/db
+      #- mongo1_data:/data/db
+    networks:
+      - bc_mongo
+
+  mongo2:
+    container_name: mongo2
+    image: mongo:4.4.6
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018", "--keyFile", "/etc/mongodb/pki/keyfile"]
+    restart: always
+    ports:
+      - 27018:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+      - MONGO_INITDB_DATABASE=peer_information
+    volumes:
+      - ${PWD}/rs_keyfile:/etc/mongodb/pki/keyfile
+      - ~/data/mongo2:/data/db
+      #- ~/data/mongo:/data/db
+      #- mongo2_data:/data/db
+    networks:
+      - bc_mongo
+
+  mongo3:
+    container_name: mongo3
+    image: mongo:4.4.6
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27019", "--keyFile", "/etc/mongodb/pki/keyfile"]
+    restart: always
+    ports:
+      - 27019:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+      - MONGO_INITDB_DATABASE=peer_information
+    volumes:
+      - ${PWD}/rs_keyfile:/etc/mongodb/pki/keyfile
+      - ~/data/mongo3:/data/db
+      #- ~/data/mongo:/data/db
+      #- mongo3_data:/data/db
+    networks:
+      - bc_mongo
+
+  bc1:
+    container_name: interface-server1
+    image: bcinterface:0.5
+    ports:
+      - 50051:50051
+    environment:
+      - REDIS_ADDR=redis1
+      - REDIS_PORT=:6379
+      - MONGO_ADDR=mongo1
+      - GRPC_PORT=:50051
+    depends_on:
+      - redis1
+      - mongo1
+    networks:
+      - bc_mongo
+      - bc_redis
+
+networks:
+  bc_mongo:
+    driver: "bridge"
+  bc_redis:
+    driver: "bridge"

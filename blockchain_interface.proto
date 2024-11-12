@@ -1,0 +1,41 @@
+syntax = "proto3";
+option go_package = "./bcinterface";
+package commu_module;   //이거 이름을 bcinterface나 communication_system 같은것도 괜찮을 것 같은데...
+
+service BlockchainInterface {
+    rpc EnrollNodeInfo(NodeData) returns(EnrollAccountResponse);
+    rpc SetupCommittee(SetupCommitteeRequest) returns(SetupCommitteeResponse);
+    rpc LeaveRequest(NodeData) returns (Empty);
+}
+message Empty {}
+
+message NodeData {
+    string address = 1;
+    bytes pubkey = 2;
+    bytes signature = 3;
+}
+
+message EnrollAccountResponse {
+    int32 code = 1;
+}
+
+message vrfValue {
+    string val = 1;
+    bytes proof = 2;
+    bytes pubkey = 3;
+}
+
+message SetupCommitteeRequest {
+    int32 round = 1;
+    string nodeip = 2;
+    bytes vrfpubkey = 3;
+    vrfValue vrfResult = 4;
+}
+
+message SetupCommitteeResponse {
+    int32 code = 1;
+}
+
+message LeaveRequestResponse {
+    int32 code = 1;
+}
