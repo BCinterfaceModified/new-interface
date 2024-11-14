@@ -74,7 +74,9 @@ func StartGrpcServer() {
 	s := grpc.NewServer()
 	pb.RegisterBlockchainInterfaceServer(s, &Server{})
 	fmt.Println("*************************************************************")
+	fmt.Println("*                                                           *")
 	fmt.Println("*                Running Interface container                *")
+	fmt.Println("*                                                           *")
 	fmt.Println("*************************************************************")
 
 	if err := s.Serve(lis); err != nil {
@@ -116,19 +118,20 @@ func (s *Server) EnrollNodeInfo(ctx context.Context, in *pb.NodeData) (*pb.Enrol
 
 	// 중복 값 확인
 	filter := bson.M{"address": in.Address, "pk": in.Pubkey, "sig": in.Signature}
-	num, err := conn.connMongo.Database("partKeyStore").Collection("partKeyStore").CountDocuments(ctx, filter)
+	num, err := conn.connMongo.Database("nodeData").Collection("nodeData").CountDocuments(ctx, filter)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	if num == 0 {
-		_, err := conn.connMongo.Database("partKeyStore").Collection("partKeyStore").InsertOne(ctx, inPartKey)
+		_, err := conn.connMongo.Database("nodeData").Collection("nodeData").InsertOne(ctx, inPartKey)
 		if err != nil {
 			fmt.Println(err)
 			return &pb.EnrollAccountResponse{Code: 500}, nil
 		}
 	}
 
+	fmt.Println("successfully send 200 response")
 	return &pb.EnrollAccountResponse{Code: 200}, nil
 }
 
@@ -145,6 +148,7 @@ func PublishMessageToRedis(channelName string, message []byte) {
 }
 
 func (s *Server) SetupCommittee(ctx context.Context, in *pb.SetupCommitteeRequest) (*pb.SetupCommitteeResponse, error) {
+	fmt.Println("Get Setup Committee Request")
 	var recvCommitteeInfo CommitteeNodeInfo
 
 	recvCommitteeInfo.Round = in.Round
