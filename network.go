@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"google.golang.org/grpc"
 )
 
@@ -59,7 +60,7 @@ var singleCache *Cache
 var initOnce sync.Once
 
 var portNumber = tool.GetEnv("GRPC_PORT", ":50051")
-var mongoUrl = tool.GetEnv("MONGO_ADDR", "localhost")
+var mongoUrl = tool.GetEnv("MONGO_ADDR", "mongo1")
 var redisUrl = tool.GetEnv("REDIS_ADDR", "localshot")
 var redisPort = tool.GetEnv("REDIS_PORT", ":6379")
 
@@ -97,7 +98,13 @@ func GetConnectorCache() *Cache {
 			Username: "root",
 			Password: "root",
 		}
-		clientOptions := options.Client().ApplyURI("mongodb://" + mongoUrl + ":27017").SetAuth(credential)
+		//clientOptions := options.Client().ApplyURI("mongodb://" + mongoUrl + ":27017").SetReadPreference(readpref.Primary()).SetAuth(credential)
+		clientOptions := options.Client().
+			ApplyURI("mongodb://mongo1:27017, mongodb://mongo2:27018, mongodb://mongo3:27019").
+			SetReplicaSet("rs0").
+			SetReadPreference(readpref.Primary()).
+			SetAuth(credential)
+
 		//("mongodb://mongo:27017").SetAuth(credential)
 		singleCache.connMongo, _ = mongo.Connect(context.TODO(), clientOptions)
 
@@ -105,6 +112,18 @@ func GetConnectorCache() *Cache {
 		err := singleCache.connMongo.Ping(context.TODO(), nil)
 		log.Println(err)
 		fmt.Println("GetConnectorCache : MongoDB Connection Made")
+
+		//연결 결과 출력하는 내용(어떤 DB에 연결되었는지.)
+		var result bson.M
+		err = singleCache.connMongo.Database("admin").
+			RunCommand(context.TODO(), bson.D{{Key: "replSetGetStatus", Value: 1}}).
+			Decode(&result)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// `replSetGetStatus` 결과 출력
+		fmt.Println("Replica Set Status:", result)
 
 	})
 	return singleCache
@@ -143,8 +162,6 @@ func PublishMessageToRedis(channelName string, message []byte) {
 	fmt.Println("PublishMsg: ", string(message))
 
 	c.Do("PUBLISH", channelName, message)
-	fmt.Println("COMMITTEE SELECTION END | ", time.Now().UnixNano()/int64(time.Millisecond))
-
 }
 
 func (s *Server) SetupCommittee(ctx context.Context, in *pb.SetupCommitteeRequest) (*pb.SetupCommitteeResponse, error) {
@@ -184,18 +201,26 @@ func (s *Server) SetupCommittee(ctx context.Context, in *pb.SetupCommitteeReques
 	return &pb.SetupCommitteeResponse{Code: 200}, nil
 }
 
-func (s *Server) LeaveRequest(ctx context.Context, in *pb.NodeData) (*pb.Empty, error) {
+func deleteData(in *pb.NodeData) {
 	conn := GetConnectorCache()
-	collection := conn.connMongo.Database("partKeyStore").Collection("partKeyStore")
+	collection := conn.connMongo.Database("nodeData").Collection("nodeData")
 
-	filter := bson.M{"address": in.Address, "pk": in.Pubkey, "sig": in.Signature}
+	fmt.Println("address: ", in.Address)
+	filter := bson.M{"address": in.Address /* , "pk": in.Pubkey, "sig": in.Signature */}
 
-	delResult, err := collection.DeleteOne(context.TODO(), filter)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	delResult, err := collection.DeleteOne(ctx, filter)
 	if err != nil {
 		log.Println("can't delete leaving node data")
 	}
 
 	fmt.Printf("Deleted %v document", delResult.DeletedCount)
+}
 
+func (s *Server) LeaveRequest(ctx context.Context, in *pb.NodeData) (*pb.Empty, error) {
+	fmt.Println("we got leave request")
+	go deleteData(in)
 	return &pb.Empty{}, nil
 }
